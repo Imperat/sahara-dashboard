@@ -16,6 +16,8 @@ from openstack_dashboard.test.integration_tests.regions import tables
 from sahara_dashboard.test.integration_tests.pages import basepage
 from sahara_dashboard.test.integration_tests.pages import mixins
 
+from selenium.webdriver.common import by
+
 
 CREATE_FIELD_MAPPING = (
     ('nodegroup_name', 'description', 'flavor', 'availability_zone', 'storage',
@@ -27,11 +29,15 @@ CREATE_FIELD_MAPPING = (
 )
 
 
+class SaharaTabbedFormRegion(forms.TabbedFormRegion):
+    _submit_locator = (by.By.CSS_SELECTOR, '*.btn.btn-primary')
+
+
 class UpdateMixin(object):
     @tables.bind_row_action('edit')
     def get_edit_form(self, button, row):
         button.click()
-        return forms.TabbedFormRegion(
+        return SaharaTabbedFormRegion(
             self.driver, self.conf,
             field_mappings=CREATE_FIELD_MAPPING)
 
@@ -48,7 +54,7 @@ class NodegrouptemplatesPage(mixins.PluginSelectMixin, mixins.DeleteMixin,
 
     @property
     def create_form(self):
-        return forms.TabbedFormRegion(
+        return SaharaTabbedFormRegion(
             self.driver, self.conf, field_mappings=CREATE_FIELD_MAPPING)
 
     def _set_checkbox_group(self, form, group_name, values=()):

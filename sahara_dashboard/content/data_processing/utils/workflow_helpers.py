@@ -172,6 +172,7 @@ def build_interface_argument_fields(
 def parse_configs_from_context(context, defaults):
     configs_dict = dict()
     for key, val in context.items():
+        import pdb; pdb.set_trace()
         if str(key).startswith("CONF"):
             key_split = str(key).split(":")
             service = key_split[1]
