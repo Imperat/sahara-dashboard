@@ -11,3 +11,22 @@
 #sahara-bullet-list {
     margin-left: 20px;
 }
+
+@-webkit-keyframes loadconfig {
+    from {width: 0%;}
+    50% {width: 50%;}
+    to {width:100%;}
+}
+@keyframes loadconfig {
+    from {width: 0%;}
+    50% {width: 50%;}
+    to {width:100%;}
+}
+
+#load-config {
+    -webkit-animation: loadconfig  0.4s infinite ease-in-out;
+    animation: loadconfig  0.4s infinite ease-in-out;
+    animation-iteration-count: 1;
+    -webkit-animation-iteration-count: 1;
+    width:100%;
+}

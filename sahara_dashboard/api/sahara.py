@@ -29,7 +29,7 @@ from sahara_dashboard import utils as u
 LOG = logging.getLogger(__name__)
 
 # "type" of Sahara service registered in keystone
-SAHARA_SERVICE = 'data-processing'
+SAHARA_SERVICE = 'data-processing-local'
 # Sahara service_type registered in Juno
 SAHARA_SERVICE_FALLBACK = 'data_processing'
 

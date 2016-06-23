@@ -43,6 +43,16 @@ class Helpers(object):
 
         return self._get_node_processes(plugin)
 
+    def get_process_configs(self, plugin_name, hadoop_version, process):
+        plugin = saharaclient.plugin_get_version_details(
+            self.request, plugin_name, hadoop_version)
+        process = process.split()[0]
+        configs = []
+        for conf in plugin.configs:
+            if conf.get('applicable_target') == process:
+                configs.append(conf)
+        return configs
+
     def _extract_parameters(self, configs, scope, applicable_target):
         parameters = []
         for config in configs:
