@@ -11,8 +11,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+
 from django.core.urlresolvers import reverse
+from django.http import HttpResponse
 from django.utils.translation import ugettext_lazy as _
+from django.views.generic import base as django_base
+
 
 from horizon import exceptions
 from horizon import tabs
@@ -30,6 +35,22 @@ import sahara_dashboard.content.data_processing.clusters. \
     nodegroup_templates.workflows.create as create_flow
 import sahara_dashboard.content.data_processing.clusters. \
     nodegroup_templates.workflows.edit as edit_flow
+from sahara_dashboard.content.data_processing.utils import helpers
+
+
+class ConfigurationStepView(django_base.View):
+
+    def get(self, request, *args, **kwargs):
+        hlps = helpers.Helpers(request)
+        plugin = request.GET.get('plugin_name')
+        plugin_version = request.GET.get('hadoop_version')
+        process_id = request.GET.get('process_id')
+
+        context = hlps.get_process_configs(
+            plugin, plugin_version, process_id)
+
+        return HttpResponse(json.dumps(context),
+                            content_type='application/json')
 
 
 class NodegroupTemplateDetailsView(tabs.TabView):
@@ -81,7 +102,8 @@ class ConfigureNodegroupTemplateView(workflows.WorkflowView):
     workflow_class = create_flow.ConfigureNodegroupTemplate
     success_url = ("horizon:project:"
                    "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"
+    template_name = "nodegroup_templates/configure-old.html"
+    ajax_template_name = "nodegroup_templates/configure.html"
     page_title = _("Create Node Group Template")
 
     def get_initial(self):
@@ -89,18 +111,59 @@ class ConfigureNodegroupTemplateView(workflows.WorkflowView):
         initial.update(self.kwargs)
         return initial
 
+    def post(self, request, *args, **kwargs):
+        if 'additional' not in self.kwargs.keys():
+            self.kwargs['additional'] = {}
+        self.kwargs['additional']['hadoop_version'] = \
+            request.POST['hadoop_version']
+        self.kwargs['additional']['plugin_name'] = request.POST['plugin_name']
+        self.kwargs['additional']['clear_storage'] = True
 
-class CopyNodegroupTemplateView(workflows.WorkflowView):
+        return super(ConfigureNodegroupTemplateView, self).post(
+            request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(ConfigureNodegroupTemplateView,
+                        self).get_context_data(**kwargs)
+
+        try:
+            context['plugin'] = self.get_initial()['plugin_name']
+            context['hadoop_version'] = self.get_initial()['hadoop_version']
+        except Exception:
+            context['plugin'] = self.get_initial()['additional']['plugin_name']
+            context['hadoop_version'] = self.get_initial(
+            )['additional']['hadoop_version']
+            context['clear_storage'] = self.get_initial(
+            )['additional']['clear_storage']
+
+        context['preloaded_tabs'] = ["generalconfigaction",
+                                     "selectnodeprocessesaction",
+                                     "securityconfigaction"]
+        return context
+
+
+class CopyNodegroupTemplateView(ConfigureNodegroupTemplateView):
     workflow_class = copy_flow.CopyNodegroupTemplate
-    success_url = ("horizon:project:"
-                   "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"
 
     def get_context_data(self, **kwargs):
         context = super(CopyNodegroupTemplateView, self)\
             .get_context_data(**kwargs)
 
         context["template_id"] = kwargs["template_id"]
+        context['plugin'] = self.get_initial()['plugin_name']
+        context['hadoop_version'] = self.get_initial()['hadoop_version']
+        context['preloaded_tabs'] = ["generalconfigaction",
+                                     "selectnodeprocessesaction",
+                                     "securityconfigaction"]
+        context['json_loaded_tabs'] = []
+        node_group_template = self.get_object()
+        if node_group_template:
+            for service, config in node_group_template.node_configs.items():
+                if config:
+                    context['preloaded_tabs'].append(
+                        service.lower() + "-parameters")
+                    context['json_loaded_tabs'].append(
+                        service.lower() + "-parameters")
         return context
 
     def get_object(self, *args, **kwargs):
@@ -124,6 +187,3 @@ class CopyNodegroupTemplateView(workflows.WorkflowView):
 
 class EditNodegroupTemplateView(CopyNodegroupTemplateView):
     workflow_class = edit_flow.EditNodegroupTemplate
-    success_url = ("horizon:project:"
-                   "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"

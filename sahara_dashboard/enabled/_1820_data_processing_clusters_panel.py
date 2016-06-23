@@ -30,7 +30,8 @@ ADD_INSTALLED_APPS = \
 
 ADD_JS_FILES = [
     'dashboard/project/data_processing/js/data_processing.event_log.js',
-    'dashboard/project/data_processing/js/data_processing.verifications.js'
+    'dashboard/project/data_processing/js/data_processing.verifications.js',
+    'dashboard/project/data_processing/js/data_processing.node_groups.js'
 ]
 
 ADD_SCSS_FILES = [

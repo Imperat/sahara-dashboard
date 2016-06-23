@@ -20,9 +20,19 @@ from django.utils.translation import ugettext
 from django.utils.translation import ugettext_lazy as _
 from oslo_utils import timeutils
 
-import sahara_dashboard.content.data_processing. \
-    utils.workflow_helpers as work_helpers
 from sahara_dashboard.api import sahara as saharaclient
+
+
+class Parameter(object):
+    def __init__(self, config):
+        self.name = config['name']
+        self.description = config.get('description', "No description")
+        self.required = not config['is_optional']
+        self.default_value = config.get('default_value', None)
+        self.initial_value = self.default_value
+        self.param_type = config['config_type']
+        self.priority = int(config.get('priority', 2))
+        self.choices = config.get('config_values', None)
 
 
 class Helpers(object):
@@ -43,13 +53,23 @@ class Helpers(object):
 
         return self._get_node_processes(plugin)
 
+    def get_process_configs(self, plugin_name, hadoop_version, process):
+        plugin = saharaclient.plugin_get_version_details(
+            self.request, plugin_name, hadoop_version)
+        process = process.split()[0]
+        configs = []
+        for conf in plugin.configs:
+            if conf.get('applicable_target') == process:
+                configs.append(conf)
+        return configs
+
     def _extract_parameters(self, configs, scope, applicable_target):
         parameters = []
         for config in configs:
             if (config['scope'] == scope and
                     config['applicable_target'] == applicable_target):
 
-                parameters.append(work_helpers.Parameter(config))
+                parameters.append(Parameter(config))
 
         return parameters
 

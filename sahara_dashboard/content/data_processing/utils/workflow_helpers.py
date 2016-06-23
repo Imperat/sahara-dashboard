@@ -14,8 +14,11 @@
 import logging
 
 from django.core.exceptions import ValidationError
+from django.core.handlers import wsgi
+from django.http.request import QueryDict
 from django.utils import safestring
 from django.utils.translation import ugettext_lazy as _
+
 import six
 
 from horizon import exceptions
@@ -24,21 +27,9 @@ from horizon import workflows
 from openstack_dashboard.api import network
 
 from sahara_dashboard.api import sahara as saharaclient
-
+from sahara_dashboard.content.data_processing.utils import helpers as hlps
 
 LOG = logging.getLogger(__name__)
-
-
-class Parameter(object):
-    def __init__(self, config):
-        self.name = config['name']
-        self.description = config.get('description', "No description")
-        self.required = not config['is_optional']
-        self.default_value = config.get('default_value', None)
-        self.initial_value = self.default_value
-        self.param_type = config['config_type']
-        self.priority = int(config.get('priority', 2))
-        self.choices = config.get('config_values', None)
 
 
 def build_control(parameter):
@@ -78,6 +69,50 @@ def build_control(parameter):
             help_text=parameter.description)
 
 
+def get_defaults_plugin_parameters(request):
+    plugin, hadoop_version = get_plugin_and_hadoop_version(request)
+    helpers = hlps.Helpers(request)
+    g_params, s_params = helpers.get_general_and_service_nodegroups_parameters(
+        plugin, hadoop_version)
+    defaults = {'general': dict()}
+    for param in g_params:
+        defaults['general'][param.name] = param.default_value
+    for service, s_param in s_params.items():
+        defaults[service] = dict()
+        for param in s_param:
+            defaults[service][param.name] = param.default_value
+    return defaults
+
+
+def get_new_request_with_default_configs(request):
+    if request.method == "POST":
+        defaults = get_defaults_plugin_parameters(request)
+        new_defaults = dict()
+        for service, params in defaults.items():
+            for param in params:
+                new_defaults["CONF:%s:%s" % (service, param)] = \
+                    defaults[service][param]
+        return RequestWithDefaults(request, new_defaults, request.POST)
+    else:
+        return request
+
+
+class ActionWithDefaults(workflows.Action):
+    def __init__(self, request, context, *args, **kwargs):
+        request = get_new_request_with_default_configs(request)
+        super(ActionWithDefaults, self).__init__(
+            request, context, *args, **kwargs)
+
+
+class RequestWithDefaults(wsgi.WSGIRequest):
+    def __init__(self, request, defaults, requested):
+        super(RequestWithDefaults, self).__init__(request.environ)
+        defaults.update(requested.dict())
+        post_data = QueryDict(mutable=True)
+        post_data.update(defaults)
+        self.POST = post_data
+
+
 def _create_step_action(name, title, parameters, advanced_fields=None,
                         service=None):
     class_fields = {}
@@ -97,7 +132,7 @@ def _create_step_action(name, title, parameters, advanced_fields=None,
 
     class_fields['Meta'] = action_meta
     action = type(str(title),
-                  (workflows.Action,),
+                  (ActionWithDefaults,),
                   class_fields)
 
     step_meta = type('Meta', (object,), dict(name=title))
@@ -176,11 +211,18 @@ def parse_configs_from_context(context, defaults):
             key_split = str(key).split(":")
             service = key_split[1]
             config = key_split[2]
+            if defaults[service][config].param_type == 'bool':
+                if defaults[service][config].default_value in [True, u'on']:
+                    if val in [True, u'on']:
+                        continue
+
             if service not in configs_dict:
                 configs_dict[service] = dict()
             if val is None:
                 continue
-            if six.text_type(defaults[service][config]) == six.text_type(val):
+            if six.text_type(defaults[service][config].default_value) == \
+                six.text_type(val):
+
                 continue
             configs_dict[service][config] = val
     return configs_dict
@@ -326,7 +368,7 @@ class ServiceParametersWorkflow(PatchedDynamicWorkflow):
 
         self.defaults[service] = dict()
         for param in parameters:
-            self.defaults[service][param.name] = param.default_value
+            self.defaults[service][param.name] = param
 
         self._register_step(step)
 
