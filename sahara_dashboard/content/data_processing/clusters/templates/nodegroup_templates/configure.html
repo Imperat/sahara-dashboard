@@ -1,7 +1,382 @@
-{% extends 'base.html' %}
 {% load i18n %}
-{% block title %}{% trans "Create Node Group Template" %}{% endblock %}
 
-{% block main %}
-    {% include 'horizon/common/_workflow.html' %}
+{% csrf_token %}
+
+{% with workflow.get_entry_point as entry_point %}
+
+<script type="text/javascript">
+
+    var currentTabs = "";
+
+    if ("{{clear_storage}}" !== "True"){
+        sessionStorage.clear();
+    }
+
+    function saveAll() {
+        var form = document.getElementById('form');
+        var elements = form.querySelectorAll('input, textarea');
+        for (var i = 0; i < elements.length; i++) {
+                var id = elements[i].getAttribute('id');
+                if (id) {
+                    var value = elements[i].value;
+
+                    if (elements[i].type != "checkbox") {
+                        sessionStorage.setItem(id, value);
+                    } else {
+                        if (elements[i].checked !== undefined) {
+                            sessionStorage.setItem(id, elements[i].checked);
+                        }
+                    }
+                }
+        }
+
+    }
+
+    function sbm() {
+
+        /*saveAll();
+        var currentTabsArr = currentTabs.split(';');
+        var sessionStorageTabs = sessionStorage.getItem('tabs');
+        if (sessionStorageTabs === null){
+          sessionStorageTabs = "";
+        }
+        var allTabsArr = sessionStorageTabs.split(';');
+
+        var difference = []
+
+        for (var i = 0; i < allTabsArr.length; i++) {
+            if (currentTabsArr.indexOf(allTabsArr[i]) == -1) {
+                var args = allTabsArr[i].split('~');
+                difference.push(loadProperty(args[1], args[0]));
+            }
+        }
+        // Before submitting form we need load all tabs, which
+        // are loaded by user in a previous session
+        $.when.apply($, difference).done(function () {
+            $('#form').submit();
+        });*/
+        $('#form').submit();
+    }
+
+    var full_configs = true;
+
+    function show_not_important_fields(element) {
+
+        if (full_configs == false){
+          var fieldset = $(element).parents("fieldset")[0];
+          $("[priority='2']", fieldset).parents("div.form-group").show();
+          var div = $(element).parents("div.field-filter")[0];
+          $("button.full-config-show",div).text("Hide full configs");
+          full_configs = true;
+        } else {
+          var fieldset = $(element).parents("fieldset")[0];
+          $("[priority='2']", fieldset).parents("div.form-group").hide();
+          var div = $(element).parents("div.field-filter")[0];
+          $("button.full-config-show",div).text("Show full configs");
+          full_configs = false;
+        }
+    }
+
+    function create_auto_search(inpt) {
+        if (inpt.has_filter) {
+            return;
+        }
+        var input = inpt;
+        inpt.has_filter = true;
+        var oldValue = "";
+        setInterval(function () {
+            var val = $(input).val();
+            if (val == oldValue) {
+                return;
+            }
+            oldValue = val;
+            var fieldset = $(input).parents("fieldset")[0];
+            if (val == "") {
+                $("label", fieldset).parents("div.form-group").show();
+                if ($("button.full-config-show")[0].style.display == "inline") {
+                  hide_not_important_fields(this);
+                }
+            } else {
+                $("label", fieldset).filter(function (idx, e) {
+                    return $(e).text().toLowerCase().indexOf(val.toLowerCase()) == -1;
+                }).parents("div.form-group").hide();
+                $("label", fieldset).filter(function (idx, e) {
+                    return $(e).text().toLowerCase().indexOf(val.toLowerCase()) > -1;
+                }).parents("div.form-group").show();
+            }
+        }, 300);
+    }
+
+    function loadProperty(process_name, step_id) {
+        if ($('#' + step_id).prop('loaded')) {
+            return;
+        } else {
+            return $.get(
+                    "node-group-config-step",
+                    {
+                        process_id: process_name,
+                        hadoop_version: '{{hadoop_version}}',
+                        plugin_name: '{{plugin}}'
+                    },
+                    onAjaxSuccess
+            );
+
+        }
+        function onAjaxSuccess(data) {
+
+            saveAll();
+
+            var string_template = 
+            '<div class="form-group" style="display: block;">' + 
+                '<label class="control-label" for="id_CONF:$process:$name">$name</label>' +
+                '<span> </span>' +
+                '<span class="help-icon" data-toggle="tooltip" data-placement="top" title="$help_text"><span class="fa fa-question-circle"></span></span>' +
+                '<div class=" ">' +
+                    '<input class="form-control" id="id_CONF:$process:$name" name="CONF:$process:$name" placeholder="$default_value" priority="$priority" type="text" value="$default_value">' +
+                '</div>' +
+            '</div>';
+
+            var bool_template =
+            '<div class="form-group" style="display: block;">' +
+                 '<div class="themable-checkbox">' +
+                     '<div>' +
+                         '<input $checked id="id_CONF:$process:$name" name="CONF:$process:$name" priority="$priority" type="checkbox" />' +
+                         '<label for="id_CONF:$process:$name">' +
+                         '<span> </span>' +
+                             '<span>$name</span>' +
+                             '<span class="help-icon" data-toggle="tooltip" data-placement="top" title="$help_text">' +
+                                 '<span class="fa fa-question-circle"></span>' +
+                             '</span>' +
+                         '</label>' +
+                     '</div>' +
+                 '</div>' +
+             '</div>';
+
+             var number_template = 
+             '<div class="form-group" style="display: block;">' + 
+                '<label class="control-label" for="id_CONF:$process:$name">$name</label>' +
+                '<span> </span>' +
+                '<span class="help-icon" data-toggle="tooltip" data-placement="top" title="$help_text"><span class="fa fa-question-circle"></span></span>' +
+                '<div class=" ">' +
+                    '<input class="form-control" id="id_CONF:$process:$name" name="CONF:$process:$name" placeholder="$default_value" priority="$priority" type="text" pattern="^[ 0-9]+$" value="$default_value">' +
+                '</div>' +
+            '</div>';
+
+            var base_template = '<div class="row"><div class="col-sm-12">' + 
+                                '<div class="input-group">' +
+                                '<span class="input-group-addon">Filter configurations:</span>' +
+                                '<input type="text" class="form-control" id="field-filter">' +
+                                '<span class="input-group-btn">' +
+                                '<button type="button" class="btn btn-default full-config-show" onclick="show_not_important_fields(this);">{% trans "Show full configs" %}</button>' +
+                                '</span>' +
+                                '</div>' +
+                                '<br>' +
+                                '</div></div>';
+
+
+            $('#' + step_id).html(base_template);
+            var process_short_name = process_name.split(' ')[0];
+
+            for (var i=0; i<data.length; i++){
+              if (data[i].config_type == 'string'){
+                var tmp = string_template.replace(/\$name/g, data[i].name).
+                                          replace(/\$help_text/g, data[i].description).
+                                          replace(/\$default_value/g, data[i].default_value).
+                                          replace(/\$priority/g, data[i].priority).
+                                          replace(/\$process/g, process_short_name);
+
+                $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
+              } else
+              if (data[i].config_type == 'bool'){
+                var tmp = bool_template.replace(/\$name/g, data[i].name).
+                                        replace(/\$help_text/g, data[i].description).
+                                        replace(/\$priority/g, data[i].priority).
+                                        replace(/\$process/g, process_short_name);
+
+
+                if (data[i].default_value == true){
+                    tmp = tmp.replace(/\$checked/g, "checked");
+                } else {
+                    tmp = tmp.replace(/\$checked/g, "");
+                }
+
+                $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
+              } else {
+                var tmp = number_template.replace(/\$name/g, data[i].name).
+                                          replace(/\$help_text/g, data[i].description).
+                                          replace(/\$default_value/g, data[i].default_value).
+                                          replace(/\$priority/g, data[i].priority).
+                                          replace(/\$process/g, process_short_name);
+
+                $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
+              }
+            }
+
+          $("#field-filter").each(function () {
+             create_auto_search(this);
+          });
+
+            $("button.full-config-show").click();
+
+            //Need save to local storage opened tabs
+
+            var tabs = sessionStorage.getItem("tabs");
+            if (tabs == null) {
+                tabs = '';
+            }
+            var step_process = step_id + '~' + process_name;
+            if ((tabs.indexOf(step_process)) == -1) {
+                tabs = tabs + step_process + ';';
+                sessionStorage.setItem("tabs", tabs);
+            }
+
+            currentTabs = currentTabs + ';' + step_process;
+
+            var form = document.getElementById('form');
+            var elements = form.querySelectorAll('input, textarea');
+            
+            for (var i = 0; i < elements.length; i++) {
+                (function (element) {
+                    var id = element.getAttribute('id');
+                    if (id) {
+                        if (element.type != 'checkbox') {
+                            var val = sessionStorage.getItem(id);
+                            if (val) {
+                                element.value = sessionStorage.getItem(id);
+                            }
+                        } else {
+                            // If we haven't info about this checkbox - let pass this.
+                            // In another case let:
+                            var checkbox_val = sessionStorage.getItem(id);
+                            if (checkbox_val != undefined){
+                                //console.log("Checkbox: " + id);
+                                //console.log("Checkbox_val: " + checkbox_val);
+                                try{
+                                    element.prop("checked", checkbox_val);
+                                } catch (err){
+                                    //console.log(element);
+                                }
+                                
+                            }
+                        }
+                    }
+
+                })(elements[i]);
+            }
+
+
+            $('#' + step_id).prop('loaded', true);
+
+        }
+    }
+</script>
+
+<div class="workflow {{ layout|join:' ' }}" data-backdrop="{{ modal_backdrop }}">
+  <form id="form" {{ workflow.attr_string|safe }} action="{{ workflow.get_absolute_url }}" {% if add_to_field %}data-add-to-field="{{ add_to_field }}"{% endif %}
+        method="POST"{% if workflow.multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}
+        {% if REDIRECT_URL %}<input type="hidden" name="{{ workflow.redirect_param_name }}"
+         value="{{ REDIRECT_URL }}" onsubmit="sbm()"/>{% endif %}
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+        {% block modal-header %}
+          {% if modal %}
+            <a href="#" class="close" data-dismiss="modal">
+              <span class="fa fa-times"></span>
+            </a>
+          {% endif %}
+          <h3 class="modal-title"> {% trans "Create Node Group Template" %} </h3>
+        {% endblock %}
+        </div>
+        <div class="modal-body">
+        {% block modal-body %}
+        <ul class="nav nav-pills{% if HORIZON_CONFIG.integration_tests_support %} selenium-nav-region{% endif %}{% if workflow.wizard %} wizard-tabs{% endif %}" role="tablist">
+            {% for step in workflow.steps %}
+            <li class="{% if entry_point == step.slug %}active{% endif %}{% if step.has_errors %} error{% endif %}{% if step.has_required_fields %} required{% endif %}" onclick="loadProperty('{{step}}', '{{step.get_id}}')">
+              <a href="#{{ step.get_id }}" data-toggle="tab" data-target="#{{ step.get_id }}">
+                {{ step }}
+                {% if step.has_required_fields %}{% include "horizon/common/_form_field_required.html" %}{% endif %}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="tab-content" id="tab-content">
+            {% for step in workflow.steps %}
+              <fieldset id="{{ step.get_id }}" class="js-tab-pane{% if entry_point == step.slug %} active{% endif %}">
+                {% if step.slug in preloaded_tabs %}
+                    {% if step.slug in json_loaded_tabs %}
+                    <script>  
+                        loadProperty('{{step}}', '{{step.get_id}}');
+                    </script>
+                    {% else %}
+                    {{ step.render }}
+                    <script>
+                        $('#' + '{{step.get_id}}').prop('loaded', true);
+                    </script>
+                    {% endif %}
+                {% else %}
+                  <h4> Loading... </h4>
+                  <div class="bs-component">
+                    <div class="progress progress-striped active">
+                      <div class="progress-bar" id="load-config"></div>
+                      
+                    </div>
+                  </div>
+                {% endif %}
+              </fieldset>
+              {% if not forloop.last %}
+                <noscript><hr /></noscript>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endblock %}
+        </div>
+        <div class="modal-footer">
+        {% block modal-footer %}
+          {% if workflow.wizard %}
+          <div class="row">
+            <div class="col-sm-12">
+              {% if modal %}
+                <a class="btn btn-default cancel">{% trans "Cancel" %}</a>
+              {% endif %}
+              <button type="button" class="btn btn-default button-previous">&laquo; &nbsp;{% trans "Back" %}</button>
+              <button type="button" class="btn btn-primary button-next">{% trans "Next" %}&nbsp; &raquo;</button>
+                <script>
+                    var form = document.getElementById('form');
+                    var elements = document.querySelectorAll('input, textarea');
+                    for (var i=0; i<elements.length; i++) {
+                    (function(element) {
+                        var id = element.getAttribute('id');
+                        element.value = sessionStorage.getItem(id);
+                        element.oninput = function() {
+                        sessionStorage.setItem(id, element.value);
+                        };
+                    }
+                    )(elements[i]);
+                }
+                </script>
+              <button type="submit" class="btn btn-primary button-final">{{ workflow.finalize_button_name }}</button>
+            </div>
+          </div>
+          {% else %}
+            {% if modal %}<a class="btn btn-default cancel">{% trans "Cancel" %}</a>{% endif %}
+            <input class="btn btn-primary" type="button" value="{{ workflow.finalize_button_name }}" onclick="sbm()"/>
+          {% endif %}
+        {% endblock %}
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endwith %}
+
+{% block modal-js %}
+  {% if workflow.wizard %}
+  <script type="text/javascript">
+    (window.$ || window.addHorizonLoadEvent)(function () {
+      horizon.modals.init_wizard();
+    });
+  </script>
+  {% endif %}
 {% endblock %}

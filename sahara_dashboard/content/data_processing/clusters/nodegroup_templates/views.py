@@ -11,10 +11,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+
+from django import forms
+from django import http
+from django import shortcuts
+
 from django.core.urlresolvers import reverse
+from django.http import HttpResponse
 from django.utils.translation import ugettext_lazy as _
+from django.views.generic import base as django_base
+
 
 from horizon import exceptions
+from horizon import messages
 from horizon import tabs
 from horizon.utils import memoized
 from horizon import workflows
@@ -30,6 +40,22 @@ import sahara_dashboard.content.data_processing.clusters. \
     nodegroup_templates.workflows.create as create_flow
 import sahara_dashboard.content.data_processing.clusters. \
     nodegroup_templates.workflows.edit as edit_flow
+from sahara_dashboard.content.data_processing.utils import helpers
+
+
+class ConfigurationStepView(django_base.View):
+
+    def get(self, request, *args, **kwargs):
+        hlps = helpers.Helpers(request)
+        plugin = request.GET.get('plugin_name')
+        plugin_version = request.GET.get('hadoop_version')
+        process_id = request.GET.get('process_id')
+
+        context = hlps.get_process_configs(
+            plugin, plugin_version, process_id)
+
+        return HttpResponse(json.dumps(context),
+                            content_type='application/json')
 
 
 class NodegroupTemplateDetailsView(tabs.TabView):
@@ -81,7 +107,8 @@ class ConfigureNodegroupTemplateView(workflows.WorkflowView):
     workflow_class = create_flow.ConfigureNodegroupTemplate
     success_url = ("horizon:project:"
                    "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"
+    template_name = "nodegroup_templates/configure-old.html"
+    ajax_template_name = "nodegroup_templates/configure.html"
     page_title = _("Create Node Group Template")
 
     def get_initial(self):
@@ -89,18 +116,116 @@ class ConfigureNodegroupTemplateView(workflows.WorkflowView):
         initial.update(self.kwargs)
         return initial
 
+    def post(self, request, *args, **kwargs):
+        if 'additional' not in self.kwargs.keys():
+            self.kwargs['additional'] = {}
+        self.kwargs['additional']['hadoop_version'] = \
+            request.POST['hadoop_version']
+        self.kwargs['additional']['plugin_name'] = request.POST['plugin_name']
+        self.kwargs['additional']['clear_storage'] = True
 
-class CopyNodegroupTemplateView(workflows.WorkflowView):
+        context = self.get_context_data(**kwargs)
+        workflow = context[self.context_object_name]
+        '''for pair in workflow.context.items():
+            if ((pair[1] is False) or (pair[1] is u'')) and (
+                'CONF' in pair[0]):
+
+                del(workflow.context[pair[0]])'''
+
+        try:
+            # Check for the VALIDATE_STEP* headers, if they are present
+            # and valid integers, return validation results as JSON,
+            # otherwise proceed normally.
+            validate_step_start = int(self.request.META.get(
+                'HTTP_X_HORIZON_VALIDATE_STEP_START', ''))
+            validate_step_end = int(self.request.META.get(
+                'HTTP_X_HORIZON_VALIDATE_STEP_END', ''))
+        except ValueError:
+            # No VALIDATE_STEP* headers, or invalid values. Just proceed
+            # with normal workflow handling for POSTs.
+            pass
+        else:
+            # There are valid VALIDATE_STEP* headers, so only do validation
+            # for the specified steps and return results.
+            data = self.validate_steps(request, workflow,
+                                       validate_step_start,
+                                       validate_step_end)
+            return http.HttpResponse(json.dumps(data),
+                                     content_type="application/json")
+
+        if not workflow.is_valid():
+            return self.render_to_response(context)
+        try:
+            success = workflow.finalize()
+        except forms.ValidationError:
+            return self.render_to_response(context)
+        except Exception:
+            success = False
+            exceptions.handle(request)
+        if success:
+            msg = workflow.format_status_message(workflow.success_message)
+            messages.success(request, msg)
+        else:
+            msg = workflow.format_status_message(workflow.failure_message)
+            messages.error(request, msg)
+        if "HTTP_X_HORIZON_ADD_TO_FIELD" in self.request.META:
+            field_id = self.request.META["HTTP_X_HORIZON_ADD_TO_FIELD"]
+            response = http.HttpResponse()
+            if workflow.object:
+                data = [self.get_object_id(workflow.object),
+                        self.get_object_display(workflow.object)]
+                response.content = json.dumps(data)
+                response["X-Horizon-Add-To-Field"] = field_id
+            return response
+        next_url = self.request.POST.get(workflow.redirect_param_name)
+        return shortcuts.redirect(next_url or workflow.get_success_url())
+
+    def get_context_data(self, **kwargs):
+        context = super(ConfigureNodegroupTemplateView,
+                        self).get_context_data(**kwargs)
+
+        try:
+            context['plugin'] = self.get_initial()['plugin_name']
+            context['hadoop_version'] = self.get_initial()['hadoop_version']
+        except Exception:
+            context['plugin'] = self.get_initial()['additional']['plugin_name']
+            context['hadoop_version'] = self.get_initial(
+            )['additional']['hadoop_version']
+            context['clear_storage'] = self.get_initial(
+            )['additional']['clear_storage']
+
+        context['preloaded_tabs'] = ["generalconfigaction",
+                                     "selectnodeprocessesaction",
+                                     "securityconfigaction"]
+        return context
+
+
+class CopyNodegroupTemplateView(ConfigureNodegroupTemplateView):
     workflow_class = copy_flow.CopyNodegroupTemplate
     success_url = ("horizon:project:"
                    "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"
+    template_name = "nodegroup_templates/configure-old.html"
+    ajax_template_name = "nodegroup_templates/configure.html"
 
     def get_context_data(self, **kwargs):
         context = super(CopyNodegroupTemplateView, self)\
             .get_context_data(**kwargs)
 
         context["template_id"] = kwargs["template_id"]
+        context['plugin'] = self.get_initial()['plugin_name']
+        context['hadoop_version'] = self.get_initial()['hadoop_version']
+        context['preloaded_tabs'] = ["generalconfigaction",
+                                     "selectnodeprocessesaction",
+                                     "securityconfigaction"]
+        context['json_loaded_tabs'] = []
+        node_group_template = self.get_object()
+        if node_group_template:
+            for service, config in node_group_template.node_configs.items():
+                if config:
+                    context['preloaded_tabs'].append(
+                        service.lower() + "-parameters")
+                    context['json_loaded_tabs'].append(
+                        service.lower() + "-parameters")
         return context
 
     def get_object(self, *args, **kwargs):
@@ -126,4 +251,4 @@ class EditNodegroupTemplateView(CopyNodegroupTemplateView):
     workflow_class = edit_flow.EditNodegroupTemplate
     success_url = ("horizon:project:"
                    "data_processing.clusters:index")
-    template_name = "nodegroup_templates/configure.html"
+    template_name = "nodegroup_templates/configure-old.html"
