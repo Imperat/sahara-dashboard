@@ -139,7 +139,7 @@
             '<div class="form-group" style="display: block;">' +
                  '<div class="themable-checkbox">' +
                      '<div>' +
-                         '<input id="id_CONF:$process:$name" name="CONF:$process:$name" priority="$priority" type="checkbox" placeholder="" $checked>' +
+                         '<input $checked id="id_CONF:$process:$name" name="CONF:$process:$name" priority="$priority" type="checkbox" />' +
                          '<label for="id_CONF:$process:$name">' +
                          '<span> </span>' +
                              '<span>$name</span>' +
@@ -172,6 +172,7 @@
                                 '<br>' +
                                 '</div></div>';
 
+
             $('#' + step_id).html(base_template);
             var process_short_name = process_name.split(' ')[0];
 
@@ -190,6 +191,8 @@
                                         replace(/\$help_text/g, data[i].description).
                                         replace(/\$priority/g, data[i].priority).
                                         replace(/\$process/g, process_short_name);
+
+
                 if (data[i].default_value == true){
                     console.log("TRUEEE");
                     tmp = tmp.replace(/\$checked/g, "checked");
@@ -198,7 +201,17 @@
                     tmp = tmp.replace(/\$checked/g, "");
                 }
 
-                $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
+               // $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
+                var checkbox_x = $('<input>', { type: 'checkbox', id: 'cb'+data[i].name, checked: 'checked' });
+                checkbox_x.prop('checked', true);
+                checkbox_x.attr('checked', true);
+                checkbox_x.checked = true;
+                $('#' + step_id).find('.row').find('.col-sm-12').append(checkbox_x);
+                /*var formatted_name = data[i].name.replace(/\./g, '\\.');
+                console.log(formatted_name);
+                $('#' + step_id).show();*/
+                //$('#id_CONF\\:' + process_short_name + '\\:' + formatted_name).checked = true;
+                //console.log($('#id_CONF\\:' + process_short_name + '\\:' + formatted_name).prop("checked"));
               } else {
                 var tmp = number_template.replace(/\$name/g, data[i].name).
                                           replace(/\$help_text/g, data[i].description).
