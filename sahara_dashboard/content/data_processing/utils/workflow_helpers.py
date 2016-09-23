@@ -99,6 +99,11 @@ def _create_step_action(name, title, parameters, advanced_fields=None,
     action = type(str(title),
                   (workflows.Action,),
                   class_fields)
+    
+    # Temporary Patch 
+    def false(x):
+        return False
+    action.is_valid = false
 
     step_meta = type('Meta', (object,), dict(name=title))
     step = type(str(name),
@@ -172,17 +177,21 @@ def build_interface_argument_fields(
 def parse_configs_from_context(context, defaults):
     configs_dict = dict()
     for key, val in context.items():
-        import pdb; pdb.set_trace()
         if str(key).startswith("CONF"):
             key_split = str(key).split(":")
             service = key_split[1]
             config = key_split[2]
+            if config == 'io.file.buffer.size':
+                import pdb; pdb.set_trace()
             if service not in configs_dict:
                 configs_dict[service] = dict()
             if val is None:
                 continue
-            if six.text_type(defaults[service][config]) == six.text_type(val):
+            if six.text_type(defaults[service][config].default_value) == six.text_type(val):
                 continue
+            if defaults[service][config].param_type == 'bool':
+                if u'on' == six.text_type(val):
+                    continue
             configs_dict[service][config] = val
     return configs_dict
 
@@ -327,7 +336,7 @@ class ServiceParametersWorkflow(PatchedDynamicWorkflow):
 
         self.defaults[service] = dict()
         for param in parameters:
-            self.defaults[service][param.name] = param.default_value
+            self.defaults[service][param.name] = param
 
         self._register_step(step)
 

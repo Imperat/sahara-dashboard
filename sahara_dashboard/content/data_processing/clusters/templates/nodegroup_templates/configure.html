@@ -8,7 +8,7 @@
 
     var currentTabs = "";
 
-    if ("{{clear_storage}}" != "True"){
+    if ("{{clear_storage}}" !== "True"){
         sessionStorage.clear();
     }
 
@@ -34,7 +34,7 @@
 
     function sbm() {
 
-        saveAll();
+        /*saveAll();
         var currentTabsArr = currentTabs.split(';');
         var sessionStorageTabs = sessionStorage.getItem('tabs');
         if (sessionStorageTabs === null){
@@ -51,10 +51,11 @@
             }
         }
         // Before submitting form we need load all tabs, which
-        // are loaded by user.
+        // are loaded by user in a previous session
         $.when.apply($, difference).done(function () {
             $('#form').submit();
-        });
+        });*/
+        $('#form').submit();
     }
 
     var full_configs = true;
@@ -194,24 +195,12 @@
 
 
                 if (data[i].default_value == true){
-                    console.log("TRUEEE");
                     tmp = tmp.replace(/\$checked/g, "checked");
                 } else {
-                    console.log("FALSEE");
                     tmp = tmp.replace(/\$checked/g, "");
                 }
 
-               // $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
-                var checkbox_x = $('<input>', { type: 'checkbox', id: 'cb'+data[i].name, checked: 'checked' });
-                checkbox_x.prop('checked', true);
-                checkbox_x.attr('checked', true);
-                checkbox_x.checked = true;
-                $('#' + step_id).find('.row').find('.col-sm-12').append(checkbox_x);
-                /*var formatted_name = data[i].name.replace(/\./g, '\\.');
-                console.log(formatted_name);
-                $('#' + step_id).show();*/
-                //$('#id_CONF\\:' + process_short_name + '\\:' + formatted_name).checked = true;
-                //console.log($('#id_CONF\\:' + process_short_name + '\\:' + formatted_name).prop("checked"));
+                $('#' + step_id).find('.row').find('.col-sm-12').append(tmp);
               } else {
                 var tmp = number_template.replace(/\$name/g, data[i].name).
                                           replace(/\$help_text/g, data[i].description).
@@ -243,7 +232,8 @@
 
             currentTabs = currentTabs + ';' + step_process;
 
-            var elements = document.querySelectorAll('input, textarea');
+            var form = document.getElementById('form');
+            var elements = form.querySelectorAll('input, textarea');
             
             for (var i = 0; i < elements.length; i++) {
                 (function (element) {
@@ -255,7 +245,19 @@
                                 element.value = sessionStorage.getItem(id);
                             }
                         } else {
-                            element.checked = (sessionStorage.getItem(id) != 'false' && sessionStorage.getItem(id));
+                            // If we haven't info about this checkbox - let pass this.
+                            // In another case let:
+                            var checkbox_val = sessionStorage.getItem(id);
+                            if (checkbox_val != undefined){
+                                //console.log("Checkbox: " + id);
+                                //console.log("Checkbox_val: " + checkbox_val);
+                                try{
+                                    element.prop("checked", checkbox_val);
+                                } catch (err){
+                                    //console.log(element);
+                                }
+                                
+                            }
                         }
                     }
 
@@ -340,10 +342,10 @@
               <button type="button" class="btn btn-default button-previous">&laquo; &nbsp;{% trans "Back" %}</button>
               <button type="button" class="btn btn-primary button-next">{% trans "Next" %}&nbsp; &raquo;</button>
                 <script>
+                    var form = document.getElementById('form');
                     var elements = document.querySelectorAll('input, textarea');
-                    for (i=0; i<elements.length; i++) {
+                    for (var i=0; i<elements.length; i++) {
                     (function(element) {
-
                         var id = element.getAttribute('id');
                         element.value = sessionStorage.getItem(id);
                         element.oninput = function() {

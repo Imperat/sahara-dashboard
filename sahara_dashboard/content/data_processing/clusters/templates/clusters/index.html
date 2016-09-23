@@ -117,7 +117,7 @@
                                 service_tab = get_service_tab(service);
                                 service_tab.show();
                                 step_id = service_tab.find("a").attr("data-target");
-                                if (step_id !== null){
+                                if (step_id !== undefined){
                                     loadProperty(service + " Parameters", step_id.substring(1));
                                 }
                             } else {

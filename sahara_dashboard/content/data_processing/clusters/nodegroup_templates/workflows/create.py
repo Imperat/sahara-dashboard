@@ -501,6 +501,30 @@ class ConfigureNodegroupTemplate(workflow_helpers.ServiceParametersWorkflow,
         if not steps_valid:
             return steps_valid
         return self.validate(self.context)
+    
+    def finalize(self):
+        """Finalizes a workflow by running through all the actions in order
+        and calling their ``handle`` methods. Returns ``True`` on full success,
+        or ``False`` for a partial success, e.g. there were non-critical
+        errors. (If it failed completely the function wouldn't return.)
+        """
+        partial = False
+        # import pdb; pdb.set_trace()
+        for step in self.steps:
+            try:
+                data = step.action.handle(self.request, self.context)
+                if data is True or data is None:
+                    continue
+                elif data is False:
+                    partial = True
+                else:
+                    self.context = step.contribute(data or {}, self.context)
+            except Exception:
+                partial = True
+                exceptions.handle(self.request)
+        if not self.handle(self.request, self.context):
+            partial = True
+        return not partial
 
     def handle(self, request, context):
         try:
