@@ -31,6 +31,17 @@
         }
 
     }
+    
+    function normalise(data){
+        if (typeof data.default_value === "string"){
+            data.default_value = data.default_value.replace(/"/g, "&quot;");
+        }
+        if (typeof data.description === "string"){
+            data.description = data.description.replace(/"/g, "&quot;");
+        }
+        data.name = data.name.replace(/"/g, "&quot;");
+        return data;
+    }
 
     function sbm() {
 
@@ -58,26 +69,24 @@
         $('#form').submit();
     }
 
-    var full_configs = true;
-
     function show_not_important_fields(element) {
+        var step_id = element.id.split("--")[1];
+        var full_configs = $('#' + step_id).prop('full-configs');
+        var fieldset = $(element).parents("fieldset")[0];
 
-        if (full_configs == false){
-          var fieldset = $(element).parents("fieldset")[0];
-          $("[priority='2']", fieldset).parents("div.form-group").show();
-          var div = $(element).parents("div.field-filter")[0];
-          $("button.full-config-show",div).text("Hide full configs");
-          full_configs = true;
+        if (full_configs){
+            $("[priority='2']", fieldset).parents("div.form-group").hide();
+            $("#" + element.id).text("Show full configs");
         } else {
-          var fieldset = $(element).parents("fieldset")[0];
-          $("[priority='2']", fieldset).parents("div.form-group").hide();
-          var div = $(element).parents("div.field-filter")[0];
-          $("button.full-config-show",div).text("Show full configs");
-          full_configs = false;
+            $("[priority='2']", fieldset).parents("div.form-group").show();
+            $("#" + element.id).text("Hide full configs");
         }
+
+        $('#' + step_id).prop('full-configs', !full_configs);
     }
 
-    function create_auto_search(inpt) {
+    function create_auto_search(inpt, step_id) {
+
         if (inpt.has_filter) {
             return;
         }
@@ -91,6 +100,10 @@
             }
             oldValue = val;
             var fieldset = $(input).parents("fieldset")[0];
+            if ($('#' + step_id).prop('full-configs') === false){
+                $('#' + step_id).prop('full-configs', true);
+                $('#btn-full--' + step_id).text("Hide full configs");
+            }
             if (val == "") {
                 $("label", fieldset).parents("div.form-group").show();
                 if ($("button.full-config-show")[0].style.display == "inline") {
@@ -123,7 +136,6 @@
 
         }
         function onAjaxSuccess(data) {
-
             saveAll();
 
             var string_template = 
@@ -132,7 +144,7 @@
                 '<span> </span>' +
                 '<span class="help-icon" data-toggle="tooltip" data-placement="top" title="$help_text"><span class="fa fa-question-circle"></span></span>' +
                 '<div class=" ">' +
-                    '<input class="form-control" id="id_CONF:$process:$name" name="CONF:$process:$name" placeholder="$default_value" priority="$priority" type="text" value="$default_value">' +
+                    '<input class="form-control" id="id_CONF:$process:$name" name="CONF:$process:$name" priority="$priority" type="text" value="$default_value">' +
                 '</div>' +
             '</div>';
 
@@ -165,19 +177,21 @@
             var base_template = '<div class="row"><div class="col-sm-12">' + 
                                 '<div class="input-group">' +
                                 '<span class="input-group-addon">Filter configurations:</span>' +
-                                '<input type="text" class="form-control" id="field-filter">' +
+                                '<input type="text" class="form-control field-filter" id="field-filter-$process_name">' +
                                 '<span class="input-group-btn">' +
-                                '<button type="button" class="btn btn-default full-config-show" onclick="show_not_important_fields(this);">{% trans "Show full configs" %}</button>' +
+                                '<button type="button" id="btn-full--$process_name" class="btn btn-default full-config-show" onclick="show_not_important_fields(this);">{% trans "Show full configs" %}</button>' +
                                 '</span>' +
                                 '</div>' +
                                 '<br>' +
                                 '</div></div>';
 
 
-            $('#' + step_id).html(base_template);
             var process_short_name = process_name.split(' ')[0];
+            var template = base_template.replace(/\$process_name/g, step_id);
+            $('#' + step_id).html(template);
 
             for (var i=0; i<data.length; i++){
+              data[i] = normalise(data[i]);
               if (data[i].config_type == 'string'){
                 var tmp = string_template.replace(/\$name/g, data[i].name).
                                           replace(/\$help_text/g, data[i].description).
@@ -212,11 +226,9 @@
               }
             }
 
-          $("#field-filter").each(function () {
-             create_auto_search(this);
+          $("#field-filter-" + step_id).each(function () {
+             create_auto_search(this, step_id);
           });
-
-            $("button.full-config-show").click();
 
             //Need save to local storage opened tabs
 
@@ -266,7 +278,8 @@
 
 
             $('#' + step_id).prop('loaded', true);
-
+            $('#' + step_id).prop('full-configs', true);
+            $('#btn-full--' + step_id).click();
         }
     }
 </script>
